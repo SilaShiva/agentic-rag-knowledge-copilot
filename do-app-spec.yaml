@@ -1,0 +1,45 @@
+# DigitalOcean App Platform spec — deploy with:
+#   doctl apps create --spec do-app-spec.yaml
+# Set the secret env vars in the App Platform dashboard (or via doctl apps update).
+# NOTE: kb ingestion reads a local git clone — on App Platform you would
+# instead mount a repo or adapt rag/kbreader.py to clone at startup
+# (KB_REPO_URL + a fine-grained GitHub PAT as KB_TOKEN).
+name: agentic-rag-knowledge-copilot
+region: blr1
+services:
+  - name: web
+    image:
+      registry_type: DOCR
+      repository: agentic-rag-knowledge-copilot
+      tag: latest
+    instance_size_slug: basic-xs
+    instance_count: 1
+    http_port: 8000
+    envs:
+      - key: ANTHROPIC_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: ANTHROPIC_BASE_URL
+        scope: RUN_TIME
+        value: https://your-llm-gateway.example.com
+      - key: LLM_MODEL
+        scope: RUN_TIME
+        value: your-model-id
+      - key: PORTKEY_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: PORTKEY_PROVIDER
+        scope: RUN_TIME
+        value: "@aws-dev-us"
+      - key: GLEAN_SERVER_URL
+        scope: RUN_TIME
+        value: https://your-glean-instance.example.com
+      - key: GLEAN_SESSION_COOKIE
+        scope: RUN_TIME
+        type: SECRET
+      - key: GLEAN_AZURE_COOKIE
+        scope: RUN_TIME
+        type: SECRET
+      - key: RATE_LIMIT_SECONDS
+        scope: RUN_TIME
+        value: "32"
