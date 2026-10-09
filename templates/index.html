@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KB Copilot</title>
+  <meta name="description" content="Agentic RAG copilot over a governed knowledge base — multi-agent writer/reviewer/reviser with Glean backup search" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">SG</div>
+      <div class="brand-text">
+        <h1>KB Copilot</h1>
+        <p class="tagline">Agentic RAG · Writer → Reviewer → Reviser · Glean backup</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <span id="status-chips" class="chips"></span>
+      <button id="reindex-btn" class="btn-sync" title="Re-read kb branches and refresh embeddings">
+        <span class="sync-icon">⟳</span> Sync kb
+      </button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="chat-pane">
+      <div id="chat" class="chat"></div>
+      <div class="composer">
+        <input id="question" type="text" autocomplete="off"
+               placeholder="Ask about CG metrics, datasets, playbooks…" />
+        <button id="ask-btn" class="btn-ask">Ask</button>
+      </div>
+      <p class="hint">Try: “How is churn defined?” · “Which tables hold campaign ROAS?”</p>
+    </section>
+
+    <aside class="side-pane">
+      <div class="panel">
+        <h2>Decision path</h2>
+        <div id="trace" class="trace empty">Ask a question to see the agent workflow.</div>
+      </div>
+      <div class="panel">
+        <h2>Sources</h2>
+        <div id="sources" class="sources empty">Citations appear here.</div>
+      </div>
+      <div class="panel">
+        <h2>Audit</h2>
+        <div id="audit" class="audit">—</div>
+      </div>
+    </aside>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
