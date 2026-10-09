@@ -90,6 +90,14 @@ new/changed documents, delete removed ones. A fresh commit on any branch is
 reflected in retrieval within seconds — no rebuild, no restart.
 State lives in `data/index_state.json`.
 
+## Demo
+
+The app is deployed on DigitalOcean App Platform — full walkthrough (chat, the
+decision-path timeline, Glean fallback, and a live Sync-kb reindex) in the
+**[demo video](https://drive.google.com/drive/folders/1oKuCmmisvdlCArkxkmO3w7xOHBGj6kZd)**.
+
+![Hosted app on DigitalOcean](assets/hosted_screenshot.png)
+
 ## Local setup
 
 ```bash
