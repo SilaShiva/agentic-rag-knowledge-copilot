@@ -42,7 +42,7 @@ services:
         type: SECRET
       - key: RATE_LIMIT_SECONDS
         scope: RUN_TIME
-        value: "32"
+        value: "2"
       # Cloud vector index — the app reads/writes embeddings here, so the
       # index survives restarts and the Sync button updates what the agent reads
       - key: VECTOR_BACKEND

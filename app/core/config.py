@@ -62,7 +62,9 @@ def _build_headers() -> dict[str, str]:
 
 _CUSTOM_HEADERS: dict[str, str] = _build_headers()
 
-# ── Rate limiter (gateway free tier is RPM-limited) ───────────────────────────
+# ── Rate limiter ──────────────────────────────────────────────────────────────
+# Conservative default (some free-tier gateways allow only 2 RPM). Probe your
+# gateway's real limit before lowering — 2 s with no 429s is a green light.
 _RATE_LIMIT_LOCK = threading.Lock()
 _LAST_CALL_TIME: float = 0.0
 RATE_LIMIT_INTERVAL: float = float(os.getenv("RATE_LIMIT_SECONDS", "32"))

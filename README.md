@@ -130,8 +130,11 @@ Latency is dominated by LLM round-trips, not retrieval. Three levers, in
 order of impact:
 
 1. `RATE_LIMIT_SECONDS` — the gateway rate limiter sleeps this long between
-   every LLM call. Lower it if your gateway allows (32 s default → 8 s makes a
-   simple question ~4× faster).
+   every LLM call. The code ships a conservative 32 s (some free-tier gateways
+   allow only 2 RPM). **Probe your gateway's real limit before lowering** — six
+   back-to-back calls at 2 s spacing with zero 429s is a safe green light; that
+   probe set the recommended `RATE_LIMIT_SECONDS=2` (~15× faster on a simple
+   question). If you ever see 429s after a burst, nudge it up.
 2. `GRADE_SHORTCUT=1` (default) — confidently-strong retrieval (top cosine
    score ≥ `GRADE_SHORTCUT_THRESHOLD`) skips the grader LLM call.
 3. Obvious greetings never reach an LLM at all — a local classifier routes
