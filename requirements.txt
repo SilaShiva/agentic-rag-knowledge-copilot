@@ -10,3 +10,4 @@ requests==2.34.2
 browser-cookie3==0.20.1
 python-dotenv==1.2.4
 pydantic==2.14.0
+pinecone==10.0.0

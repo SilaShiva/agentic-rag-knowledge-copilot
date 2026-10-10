@@ -43,3 +43,26 @@ services:
       - key: RATE_LIMIT_SECONDS
         scope: RUN_TIME
         value: "32"
+      # Cloud vector index — the app reads/writes embeddings here, so the
+      # index survives restarts and the Sync button updates what the agent reads
+      - key: VECTOR_BACKEND
+        scope: RUN_TIME
+        value: pinecone
+      - key: PINECONE_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: PINECONE_INDEX
+        scope: RUN_TIME
+        value: kb-knowledge
+      # TLS verification stays ON on hosting (no corporate proxy there)
+      # - key: PINECONE_INSECURE_TLS
+      #   scope: RUN_TIME
+      #   value: "0"
+      # Grader fast-path: skip the grade LLM call on confidently-strong retrieval
+      - key: GRADE_SHORTCUT
+        scope: RUN_TIME
+        value: "1"
+      - key: GRADE_SHORTCUT_THRESHOLD
+        scope: RUN_TIME
+        value: "0.45"
+        value: "32"

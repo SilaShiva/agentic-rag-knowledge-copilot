@@ -7,13 +7,19 @@ appends an event to state["events"] so the UI can render the decision path.
 """
 from __future__ import annotations
 
+import re
 import time
+
+import os
 
 from app.agents.llm import complete, complete_json
 from app.core.config import RETRIEVAL_K
 from app.core.logging import logger
 from app.rag import vectorstore
 from app.tools import glean
+
+GRADE_SHORTCUT = os.getenv("GRADE_SHORTCUT", "1") == "1"
+GRADE_SHORTCUT_THRESHOLD = float(os.getenv("GRADE_SHORTCUT_THRESHOLD", "0.45"))
 
 ROUTE_SYSTEM = """You classify an incoming chat message for a knowledge copilot
 over a governed analytics knowledge base (metrics, datasets, playbooks).
@@ -22,20 +28,49 @@ Use "greeting" for hellos, thanks, small talk, identity questions
 ("who are you"), or anything not asking for knowledge. Everything that wants an
 answer about metrics, tables, definitions, processes or analysis → "question"."""
 
+# Cheap local pre-check: obvious greetings/small talk skip the router LLM call
+# entirely (saves one rate-limited round-trip on every hello).
+_GREETING_RE = re.compile(
+    r"^\s*(hi|hey+|hello+|yo|sup|good\s*(morning|afternoon|evening)|thanks|"
+    r"thank\s*you|thx|ok+|nice|cool|great|bye+|see\s*ya|gm|gn)\b"
+    r"(\s+(there|again|all|everyone|folks|team|sir|madam))?\s*[\s!.,]*$",
+    re.IGNORECASE,
+)
+_QUESTION_RE = re.compile(
+    r"\?|\b(what|who|why|when|where|which|how|is|are|does|do|can|could|should|"
+    r"define|explain|tell|list|show|compare)\b",
+    re.IGNORECASE,
+)
+
+
+def _quick_route(q: str) -> str | None:
+    """Return 'greeting'/'question' when obvious locally, else None (use LLM)."""
+    stripped = q.strip().strip("?!.,")
+    if _GREETING_RE.match(stripped):
+        return "greeting"
+    if _QUESTION_RE.search(q):
+        return "question"
+    return None
+
 
 def route_node(state: dict) -> dict:
     t0 = time.time()
     q = state["question"]
-    try:
-        verdict = complete_json(ROUTE_SYSTEM, f"Message: {q!r}", max_tokens=60)
-        qtype = verdict.get("type", "question")
-    except Exception as exc:
-        logger.warning("route: LLM failed (%s) — defaulting to question", exc)
-        qtype = "question"
+    qtype = _quick_route(q)
+    used_llm = False
+    if qtype is None:
+        used_llm = True
+        try:
+            verdict = complete_json(ROUTE_SYSTEM, f"Message: {q!r}", max_tokens=60)
+            qtype = verdict.get("type", "question")
+        except Exception as exc:
+            logger.warning("route: LLM failed (%s) — defaulting to question", exc)
+            qtype = "question"
     state["question_type"] = qtype
     state["events"].append({
         "step": "route", "agent": "Router", "decision": qtype,
-        "detail": "answered directly" if qtype == "greeting" else "enters RAG pipeline",
+        "detail": ("answered directly" if qtype == "greeting" else "enters RAG pipeline")
+                  + (" (llm)" if used_llm else " (quick)"),
         "latency_ms": int((time.time() - t0) * 1000),
     })
     return state
@@ -93,6 +128,19 @@ def grade_node(state: dict) -> dict:
     hits = state.get("kb_hits", [])
     if not hits:
         state["evidence_verdict"] = "WEAK"
+        return state
+    # Fast path: when retrieval is confidently strong (top score high AND at
+    # least two supporting chunks), the grader adds little — skip an LLM
+    # round-trip. Tuned to the MiniLM cosine scale; disable via
+    # GRADE_SHORTCUT=0.
+    top = max(h["score"] for h in hits)
+    if GRADE_SHORTCUT and top >= GRADE_SHORTCUT_THRESHOLD and len(hits) >= 2:
+        state["evidence_verdict"] = "GOOD"
+        state["events"].append({
+            "step": "grade", "agent": "Evidence Grader", "decision": "GOOD",
+            "detail": f"skipped LLM grade — top score {top} ≥ {GRADE_SHORTCUT_THRESHOLD}",
+            "latency_ms": 0,
+        })
         return state
     evidence = "\n\n---\n\n".join(
         f"[{h['path']} @ {h['branches']}]\n{h['text']}" for h in hits

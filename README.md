@@ -69,7 +69,7 @@ dependencies are the LLM gateway and your own knowledge source.
 |---|---|---|
 | LLM | Any OpenAI-compatible gateway via **Portkey headers** | one provider for all agents; swap with one env var |
 | Embeddings | **fastembed** `all-MiniLM-L6-v2` (ONNX, CPU) | no torch, no API, free |
-| Vector store | **Chroma** (local, persistent) | zero-setup, cosine HNSW |
+| Vector store | **Pluggable**: Chroma (local) or **Pinecone** (cloud) via `VECTOR_BACKEND` | zero-setup dev → persistent cloud for hosting, one env var |
 | Backup search | **Glean** — cookie-based SSO, **no API key** | Chrome auto-extract via `browser-cookie3`, `.env` fallback |
 | Orchestration | **LangGraph** | conditional edges = the agentic control |
 | API / UI | FastAPI + vanilla HTML/CSS/JS | dark chat UI with decision-path timeline |
@@ -90,6 +90,22 @@ new/changed documents, delete removed ones. A fresh commit on any branch is
 reflected in retrieval within seconds — no rebuild, no restart.
 State lives in `data/index_state.json`.
 
+### Vector backend: local Chroma or cloud Pinecone
+
+`VECTOR_BACKEND` picks where embeddings live (both backends share the same
+chunking/embedding code and the same id scheme `<content_hash>:<chunk_i>`):
+
+- **`chroma`** (default) — persistent local store, zero setup. Ideal for dev.
+- **`pinecone`** — managed cloud index. Use when the app runs on ephemeral
+  hosting: the index survives restarts, and the Sync button updates the same
+  index the running agent queries — a reindex from anywhere is live everywhere.
+
+The incremental semantics are identical on both: hash-diff decides what gets
+re-embedded, and only changed documents are written or deleted. To seed a fresh
+Pinecone index from an existing local one: `python push_to_pinecone.py`.
+TLS verification stays **on** by default (`PINECONE_INSECURE_TLS=1` only for
+local dev behind a corporate SSL-inspecting proxy).
+
 ## Demo
 
 The app is deployed on DigitalOcean App Platform — full walkthrough (chat, the
@@ -108,6 +124,19 @@ copy .env.example .env                          # fill in values (below)
 .venv/Scripts/python run.py                     # http://localhost:8000
 ```
 
+### Response speed
+
+Latency is dominated by LLM round-trips, not retrieval. Three levers, in
+order of impact:
+
+1. `RATE_LIMIT_SECONDS` — the gateway rate limiter sleeps this long between
+   every LLM call. Lower it if your gateway allows (32 s default → 8 s makes a
+   simple question ~4× faster).
+2. `GRADE_SHORTCUT=1` (default) — confidently-strong retrieval (top cosine
+   score ≥ `GRADE_SHORTCUT_THRESHOLD`) skips the grader LLM call.
+3. Obvious greetings never reach an LLM at all — a local classifier routes
+   them instantly.
+
 ### .env values
 
 - `ANTHROPIC_API_KEY` / `ANTHROPIC_BASE_URL` / `PORTKEY_API_KEY` / `PORTKEY_PROVIDER`
@@ -119,14 +148,19 @@ copy .env.example .env                          # fill in values (below)
   instance. Cookies from DevTools → Application → Cookies (expires ~24 h;
   alternative: close Chrome and restart the app for auto-extract).
   **No Glean API key needed.**
+- `VECTOR_BACKEND=pinecone` + `PINECONE_API_KEY` / `PINECONE_INDEX` — use the
+  cloud index (recommended for any deployment; see the vector-backend section).
 
 ## DigitalOcean deployment
 
 Ships `Dockerfile` + `do-app-spec.yaml` (App Platform blueprint). Two notes:
 
-1. **KB source** — locally we read a git clone from disk. On App Platform,
-   adapt `app/rag/kbreader.py` to `git clone` the private repo at startup
-   (`KB_REPO_URL` + fine-grained PAT), and mount a persistent volume for `data/`.
+1. **Index** — with `VECTOR_BACKEND=pinecone` the agent's embeddings live in
+   the cloud, so no persistent volume is needed and restarts don't lose the
+   index. The KB clone is only required for *Sync* (change detection); without
+   it, sync from a machine that has the clone and the deployed app reads the
+   update immediately. Set `PINECONE_API_KEY` as an encrypted env var and leave
+   `PINECONE_INSECURE_TLS` unset (verification stays on).
 2. **Glean cookies** — session cookies are short-lived; set them as encrypted
    env vars and re-copy when they expire (the UI shows a "Glean no cookies"
    chip instead of failing).

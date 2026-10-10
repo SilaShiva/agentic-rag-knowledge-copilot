@@ -1,9 +1,11 @@
 """
-Vector store — Chroma (persistent, local) + fastembed MiniLM-L6-v2 (ONNX, free).
+Vector store facade — dispatches to the configured backend.
 
-Chunk-level records: each unique kb document is split into overlapping
-word chunks; metadata carries content_hash + path + branches so incremental
-reindex can delete/re-embed only what changed.
+VECTOR_BACKEND=chroma    → local persistent Chroma (default, zero-setup dev)
+VECTOR_BACKEND=pinecone  → cloud Pinecone index (shared/persistent on hosting)
+
+Both backends expose: upsert_documents / delete_documents / search / count.
+Embedding + chunking live here (single source) and are shared by both.
 """
 from __future__ import annotations
 
@@ -12,7 +14,7 @@ import threading
 import chromadb
 from chromadb.config import Settings
 
-from app.core.config import CHROMA_DIR, RETRIEVAL_K
+from app.core.config import CHROMA_DIR, RETRIEVAL_K, VECTOR_BACKEND
 from app.core.logging import logger
 
 EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
@@ -68,12 +70,20 @@ def embed(texts: list[str]) -> list[list[float]]:
     return [[float(x) for x in v] for v in _get_embedder().embed(texts)]
 
 
-def upsert_documents(records: list[dict]) -> dict:
-    """
-    records: [{content_hash, path, branches, content}] — chunk, embed, upsert.
+def _backend():
+    if VECTOR_BACKEND == "pinecone":
+        from app.rag import pinecone_store
 
-    Deletion of removed docs is handled by delete_documents(). Returns counts.
-    """
+        return pinecone_store
+    return None  # None = this module IS the chroma backend
+
+
+def upsert_documents(records: list[dict]) -> dict:
+    be = _backend()
+    if be is not None:
+        return be.upsert_documents(records)
+
+    """Chroma path — chunk, embed, upsert in blocks."""
     if not records:
         return {"chunks_added": 0}
     collection = get_collection()
@@ -81,7 +91,6 @@ def upsert_documents(records: list[dict]) -> dict:
         ids: list[str] = []
         documents: list[str] = []
         metadatas: list[dict] = []
-        embeddings: list[list[float]] = []
         for rec in records:
             chunks = chunk_text(rec["content"])
             for i, chunk in enumerate(chunks):
@@ -95,7 +104,6 @@ def upsert_documents(records: list[dict]) -> dict:
                     "source": "kb",
                 })
         embeddings = embed(documents)
-        # Chroma caps batch sizes; go in blocks
         block = 128
         for i in range(0, len(ids), block):
             collection.upsert(
@@ -109,7 +117,10 @@ def upsert_documents(records: list[dict]) -> dict:
 
 
 def delete_documents(content_hashes: list[str]) -> int:
-    """Remove all chunks of the given unique documents. Returns n deleted."""
+    be = _backend()
+    if be is not None:
+        return be.delete_documents(content_hashes)
+
     if not content_hashes:
         return 0
     collection = get_collection()
@@ -119,15 +130,18 @@ def delete_documents(content_hashes: list[str]) -> int:
 
 
 def search(query: str, k: int = RETRIEVAL_K) -> list[dict]:
-    """Cosine top-k. Returns [{text, path, branches, score, source}]."""
+    be = _backend()
+    if be is not None:
+        return be.search(query, k=k)
+
     collection = get_collection()
-    count = collection.count()
-    if count == 0:
+    count_ = collection.count()
+    if count_ == 0:
         return []
     q_vec = embed([query])[0]
     res = collection.query(
         query_embeddings=[q_vec],
-        n_results=min(k, count),
+        n_results=min(k, count_),
         include=["documents", "metadatas", "distances"],
     )
     out: list[dict] = []
@@ -145,6 +159,10 @@ def search(query: str, k: int = RETRIEVAL_K) -> list[dict]:
 
 
 def count() -> int:
+    be = _backend()
+    if be is not None:
+        return be.count()
+
     try:
         return get_collection().count()
     except Exception:

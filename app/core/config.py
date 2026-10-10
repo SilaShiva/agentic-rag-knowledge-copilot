@@ -106,6 +106,13 @@ GLEAN_SERVER_URL: str = os.getenv("GLEAN_SERVER_URL", "").rstrip("/")
 # ── Knowledge base source ─────────────────────────────────────────────────────
 KB_LOCAL_PATH: Path = Path(os.getenv("KB_LOCAL_PATH", ""))
 
+# ── Vector store backend ──────────────────────────────────────────────────────
+# "chroma" (local, default) or "pinecone" (cloud — needed when the app runs on
+# ephemeral hosting, so the index survives restarts and shares across deploys).
+VECTOR_BACKEND: str = os.getenv("VECTOR_BACKEND", "chroma").lower()
+PINECONE_API_KEY: str = os.getenv("PINECONE_API_KEY", "")
+PINECONE_INDEX: str = os.getenv("PINECONE_INDEX", "kb-knowledge")
+
 # ── Workflow tuning ───────────────────────────────────────────────────────────
 MAX_REVISIONS: int = int(os.getenv("MAX_REVISIONS", "3"))
 MAX_RETRIEVAL_RETRIES: int = int(os.getenv("MAX_RETRIEVAL_RETRIES", "2"))
