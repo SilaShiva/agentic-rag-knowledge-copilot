@@ -30,7 +30,7 @@ services:
         type: SECRET
       - key: PORTKEY_PROVIDER
         scope: RUN_TIME
-        value: "@aws-dev-us"
+        value: "@your-provider"
       - key: GLEAN_SERVER_URL
         scope: RUN_TIME
         value: https://your-glean-instance.example.com

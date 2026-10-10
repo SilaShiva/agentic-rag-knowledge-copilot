@@ -50,7 +50,7 @@ def _build_headers() -> dict[str, str]:
     headers: dict[str, str] = {}
     pk_api_key = os.getenv("PORTKEY_API_KEY")
     pk_virtual_key = os.getenv("PORTKEY_VIRTUAL_KEY")
-    pk_provider = os.getenv("PORTKEY_PROVIDER", "@aws-dev-us")
+    pk_provider = os.getenv("PORTKEY_PROVIDER", "")
     if pk_api_key:
         headers["x-portkey-api-key"] = pk_api_key
     if pk_virtual_key:
